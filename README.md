@@ -1,0 +1,535 @@
+# OpenJob RESTful API — Versi 1
+
+RESTful API untuk aplikasi rekrutmen internal perusahaan. Menangani data lowongan
+kerja, lamaran, profil kandidat, profil perusahaan, kategori, dan bookmark.
+
+Submission kelas **Back-End Fundamental dengan JavaScript** — Dicoding.
+
+---
+
+## Daftar Isi
+
+- [Tech Stack](#tech-stack)
+- [Struktur Proyek](#struktur-proyek)
+- [ERD](#erd)
+- [Instalasi](#instalasi)
+- [Konfigurasi Environment](#konfigurasi-environment)
+- [Migrasi Database](#migrasi-database)
+- [Menjalankan Aplikasi](#menjalankan-aplikasi)
+- [Daftar Scripts](#daftar-scripts)
+- [Autentikasi](#autentikasi)
+- [Daftar Endpoint](#daftar-endpoint)
+- [Format Response](#format-response)
+- [Aturan Validasi](#aturan-validasi)
+- [Pengujian Postman](#pengujian-postman)
+- [Pemenuhan Kriteria Submission](#pemenuhan-kriteria-submission)
+
+---
+
+## Tech Stack
+
+| Komponen        | Teknologi                  |
+| --------------- | -------------------------- |
+| Runtime         | Node.js >= 20 (ESM)        |
+| Framework       | Express 5                  |
+| Database        | PostgreSQL                 |
+| Database Client | `pg` (connection pool)     |
+| Migration       | `node-pg-migrate`          |
+| Validasi        | Joi                        |
+| Autentikasi     | JWT (`jsonwebtoken`)       |
+| Hashing         | bcrypt                     |
+| Konfigurasi     | dotenv                     |
+| Linter          | ESLint                     |
+
+---
+
+## Struktur Proyek
+
+Aplikasi dipisah menjadi beberapa lapisan agar setiap berkas punya satu tanggung
+jawab: **route → controller → service → repository**.
+
+```
+OpenJob-API/
+├── ERD-OpenJob-versi-1.png        # Entity Relationship Diagram
+├── eslint.config.js
+├── package.json
+├── .env                           # kredensial lokal (tidak di-commit)
+├── .env.example                   # template environment variable
+├── migrations/                    # node-pg-migrate, berprefiks timestamp
+│   ├── 1785166161186_uuid-extentions.js
+│   ├── 1785167161186_create-table-users.js
+│   ├── 1785169855217_create-table-authentications.js
+│   ├── 1785169900643_create-table-categories.js
+│   ├── 1785169907130_create-table-companies.js
+│   ├── 1785170056692_create-table-jobs.js
+│   ├── 1785170063921_create-table-bookmarks.js
+│   └── 1785170071904_create-table-applications.js
+└── src/
+    ├── app.js                     # instance Express + middleware global
+    ├── server.js                  # HTTP listener + graceful shutdown
+    ├── config/
+    │   ├── env.js                 # pembacaan & validasi environment variable
+    │   └── database.js            # PostgreSQL connection pool
+    ├── routes/                    # definisi endpoint
+    │   ├── index.js               # barrel: memasang seluruh sub-router
+    │   ├── users.route.js
+    │   ├── auth.route.js
+    │   ├── companies.route.js
+    │   ├── categories.route.js
+    │   ├── jobs.route.js
+    │   ├── applications.route.js
+    │   ├── bookmarks.route.js
+    │   └── profile.route.js
+    ├── controllers/               # membaca request, mengirim response
+    │   ├── index.js
+    │   └── *.controller.js
+    ├── services/                  # aturan bisnis, melempar error domain
+    │   ├── index.js
+    │   └── *.service.js
+    ├── repositories/              # satu-satunya lapisan yang menulis SQL
+    │   ├── index.js
+    │   └── *.repository.js
+    ├── validators/                # skema Joi
+    │   ├── index.js
+    │   ├── *.validator.js
+    │   └── common/                # skema yang dipakai ulang (uuid, password)
+    ├── middlewares/
+    │   ├── index.js
+    │   ├── auth.middleware.js     # verifikasi Bearer access token
+    │   ├── validate.middleware.js # validasi payload dengan Joi
+    │   ├── notFound.middleware.js # route tidak dikenal → 404
+    │   └── error.middleware.js    # error handler terpusat
+    ├── errors/                    # ClientError, NotFoundError, dll.
+    └── utils/
+        └── uuid.js
+```
+
+### Alur sebuah request
+
+```
+Request
+   ↓
+route          → menentukan endpoint, memasang middleware auth & validasi
+   ↓
+controller     → mengambil data dari req, memanggil service, menulis response
+   ↓
+service        → aturan bisnis, melempar NotFoundError/InvariantError/dll.
+   ↓
+repository     → menjalankan query SQL, mengembalikan baris
+   ↓
+PostgreSQL
+```
+
+Error yang dilempar service tidak ditangkap di controller. Express 5 meneruskan
+promise yang rejected ke `error.middleware.js`, sehingga controller tetap ringkas
+tanpa blok `try/catch`.
+
+---
+
+## ERD
+
+Diagram relasi antar tabel tersedia pada berkas **`ERD-OpenJob-versi-1.png`** di
+root proyek.
+
+Ringkasan relasi:
+
+| Tabel             | Relasi                                                        |
+| ----------------- | ------------------------------------------------------------- |
+| `users`           | 1 user memiliki banyak `applications`, `bookmarks`, `authentications` |
+| `companies`       | 1 company memiliki banyak `jobs`                              |
+| `categories`      | 1 category memiliki banyak `jobs`                             |
+| `jobs`            | milik 1 `company` dan 1 `category`                            |
+| `applications`    | menghubungkan `users` ↔ `jobs`                                |
+| `bookmarks`       | menghubungkan `users` ↔ `jobs`                                |
+| `authentications` | menyimpan refresh token milik `users`                         |
+
+Seluruh foreign key memakai `ON DELETE CASCADE` dan diberi index tersendiri.
+
+**Unique constraint:**
+
+| Tabel             | Kolom                  |
+| ----------------- | ---------------------- |
+| `users`           | `email`                |
+| `categories`      | `name`                 |
+| `authentications` | `token`                |
+| `bookmarks`       | `(user_id, job_id)`    |
+
+---
+
+## Instalasi
+
+Prasyarat: **Node.js >= 20** dan **PostgreSQL** yang sudah berjalan.
+
+```bash
+git clone https://github.com/Rothiii/OpenJob-API.git
+cd OpenJob-API
+npm install
+```
+
+Buat database:
+
+```bash
+createdb openjob
+```
+
+---
+
+## Konfigurasi Environment
+
+Salin template lalu sesuaikan nilainya:
+
+```bash
+cp .env.example .env
+```
+
+Isi berkas `.env`:
+
+```env
+# Server configuration
+NODE_ENV=development
+HOST=localhost
+PORT=3000
+
+# Database configuration (juga dipakai node-pg-migrate)
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=
+PGDATABASE=openjob
+
+# JWT secret — generate dengan: openssl rand -hex 32
+ACCESS_TOKEN_KEY=
+REFRESH_TOKEN_KEY=
+ACCESS_TOKEN_AGE=3h
+```
+
+| Variabel            | Wajib | Default     | Keterangan                              |
+| ------------------- | ----- | ----------- | --------------------------------------- |
+| `NODE_ENV`          | tidak | development | Mode aplikasi                           |
+| `HOST`              | tidak | localhost   | Host HTTP server                        |
+| `PORT`              | tidak | 3000        | Port HTTP server                        |
+| `PGHOST`            | ya    | —           | Host PostgreSQL                         |
+| `PGPORT`            | tidak | 5432        | Port PostgreSQL                         |
+| `PGUSER`            | ya    | —           | User PostgreSQL                         |
+| `PGPASSWORD`        | tidak | (kosong)    | Password PostgreSQL                     |
+| `PGDATABASE`        | ya    | —           | Nama database                           |
+| `ACCESS_TOKEN_KEY`  | ya    | —           | Secret key access token                 |
+| `REFRESH_TOKEN_KEY` | ya    | —           | Secret key refresh token                |
+| `ACCESS_TOKEN_AGE`  | tidak | 3h          | Masa berlaku access token               |
+
+Kredensial tidak pernah ditulis di dalam kode. `src/config/env.js` membaca seluruh
+variabel di atas dan **menghentikan proses saat startup** jika ada variabel wajib
+yang kosong, sehingga kesalahan konfigurasi ketahuan sejak awal.
+
+Berkas `.env` sudah masuk `.gitignore`; hanya `.env.example` yang di-commit.
+
+---
+
+## Migrasi Database
+
+Pengelolaan struktur tabel memakai **node-pg-migrate**. Nama setiap berkas
+migrasi berprefiks timestamp yang dibuat otomatis oleh CLI.
+
+```bash
+npm run migrate:up       # jalankan seluruh migrasi
+npm run migrate:down     # batalkan satu migrasi terakhir
+npm run migrate:reset    # turunkan semua lalu naikkan lagi dari awal
+```
+
+Membuat migrasi baru:
+
+```bash
+npm run migrate:create -- create-table-example
+```
+
+node-pg-migrate membaca koneksi dari variabel `PGHOST`, `PGPORT`, `PGUSER`,
+`PGPASSWORD`, dan `PGDATABASE` di `.env`, jadi tidak perlu `DATABASE_URL`.
+
+Urutan tabel yang dibuat: `uuid-ossp` extension → `users` → `authentications` →
+`categories` → `companies` → `jobs` → `bookmarks` → `applications`.
+
+---
+
+## Menjalankan Aplikasi
+
+Mode pengembangan (auto-reload dengan nodemon):
+
+```bash
+npm run start:dev
+```
+
+Mode produksi:
+
+```bash
+npm start
+```
+
+Server berjalan di `http://localhost:3000` (mengikuti `HOST` dan `PORT`).
+Cek kesehatan server:
+
+```bash
+curl http://localhost:3000/health
+```
+
+---
+
+## Daftar Scripts
+
+| Perintah                 | Kegunaan                                       |
+| ------------------------ | ---------------------------------------------- |
+| `npm run start:dev`      | Menjalankan server dengan nodemon (development) |
+| `npm run dev`            | Alias dari `start:dev`                          |
+| `npm start`              | Menjalankan server tanpa watcher                |
+| `npm run lint`           | Menjalankan ESLint pada `src` dan `migrations`  |
+| `npm run migrate:up`     | Menjalankan seluruh migrasi                     |
+| `npm run migrate:down`   | Membatalkan satu migrasi terakhir               |
+| `npm run migrate:reset`  | Reset seluruh skema database                    |
+| `npm run migrate:create` | Membuat berkas migrasi baru                     |
+
+---
+
+## Autentikasi
+
+Autentikasi memakai **JWT**, bukan session maupun cookie.
+
+- **Access token** — payload berisi `{ id }` milik user, ditandatangani dengan
+  `ACCESS_TOKEN_KEY`, berlaku **3 jam**.
+- **Refresh token** — ditandatangani dengan `REFRESH_TOKEN_KEY`, **disimpan di
+  tabel `authentications`**. Refresh hanya berhasil jika signature valid *dan*
+  token tersebut masih terdaftar di database.
+
+Endpoint yang diproteksi memerlukan header:
+
+```
+Authorization: Bearer <access_token>
+```
+
+Middleware `auth.middleware.js` memverifikasi token lalu menaruh `{ id }` pada
+`req.user`. Bila header hilang atau token tidak valid, request dijawab `401`
+sebelum menyentuh database.
+
+Alur token:
+
+```
+POST   /authentications   → login, menerbitkan accessToken + refreshToken
+PUT    /authentications   → menukar refreshToken menjadi accessToken baru
+DELETE /authentications   → logout, menghapus refreshToken dari database
+```
+
+`DELETE /authentications` diautentikasi oleh refresh token pada body, bukan oleh
+access token pada header.
+
+---
+
+## Daftar Endpoint
+
+### Public (tanpa autentikasi)
+
+| Method | Endpoint                        | Keterangan                     |
+| ------ | ------------------------------- | ------------------------------ |
+| POST   | `/users`                        | Registrasi user baru           |
+| GET    | `/users/:id`                    | Detail user                    |
+| POST   | `/authentications`              | Login                          |
+| PUT    | `/authentications`              | Perbarui access token          |
+| GET    | `/companies`                    | Daftar perusahaan              |
+| GET    | `/companies/:id`                | Detail perusahaan              |
+| GET    | `/categories`                   | Daftar kategori                |
+| GET    | `/categories/:id`               | Detail kategori                |
+| GET    | `/jobs`                         | Daftar lowongan (+ pencarian)  |
+| GET    | `/jobs/:id`                     | Detail lowongan                |
+| GET    | `/jobs/company/:companyId`      | Lowongan berdasarkan perusahaan |
+| GET    | `/jobs/category/:categoryId`    | Lowongan berdasarkan kategori  |
+| GET    | `/health`                       | Status server                  |
+
+### Protected (butuh `Authorization: Bearer <access_token>`)
+
+| Method | Endpoint                        | Keterangan                        |
+| ------ | ------------------------------- | --------------------------------- |
+| DELETE | `/authentications`              | Logout                            |
+| GET    | `/profile`                      | Profil user yang sedang login      |
+| GET    | `/profile/applications`         | Daftar lamaran milik user          |
+| GET    | `/profile/bookmarks`            | Daftar bookmark milik user         |
+| POST   | `/companies`                    | Tambah perusahaan                  |
+| PUT    | `/companies/:id`                | Ubah perusahaan                    |
+| DELETE | `/companies/:id`                | Hapus perusahaan                   |
+| POST   | `/categories`                   | Tambah kategori                    |
+| PUT    | `/categories/:id`               | Ubah kategori                      |
+| DELETE | `/categories/:id`               | Hapus kategori                     |
+| POST   | `/jobs`                         | Tambah lowongan                    |
+| PUT    | `/jobs/:id`                     | Ubah lowongan                      |
+| DELETE | `/jobs/:id`                     | Hapus lowongan                     |
+| POST   | `/applications`                 | Melamar pekerjaan                  |
+| GET    | `/applications`                 | Daftar seluruh lamaran             |
+| GET    | `/applications/:id`             | Detail lamaran                     |
+| GET    | `/applications/user/:userId`    | Lamaran berdasarkan user           |
+| GET    | `/applications/job/:jobId`      | Lamaran berdasarkan lowongan       |
+| PUT    | `/applications/:id`             | Ubah status lamaran                |
+| DELETE | `/applications/:id`             | Hapus lamaran                      |
+| POST   | `/jobs/:jobId/bookmark`         | Simpan lowongan                    |
+| GET    | `/jobs/:jobId/bookmark/:id`     | Detail bookmark                    |
+| DELETE | `/jobs/:jobId/bookmark`         | Hapus bookmark pada lowongan       |
+| GET    | `/bookmarks`                    | Seluruh bookmark milik user        |
+
+### Pencarian lowongan
+
+`GET /jobs` menerima dua query parameter opsional yang dapat digabungkan.
+Pencocokan bersifat *case-insensitive* dan parsial (`ILIKE`).
+
+| Parameter      | Keterangan                          |
+| -------------- | ----------------------------------- |
+| `title`        | Mencari lowongan berdasarkan judul  |
+| `company-name` | Mencari lowongan berdasarkan nama perusahaan |
+
+```bash
+curl "http://localhost:3000/jobs?title=Backend"
+curl "http://localhost:3000/jobs?company-name=Tech%20Corp"
+curl "http://localhost:3000/jobs?title=Developer&company-name=Tech"
+```
+
+Parameter kosong (`?title=&company-name=`) diabaikan sehingga seluruh lowongan
+dikembalikan.
+
+---
+
+## Format Response
+
+Berhasil — satu objek:
+
+```json
+{
+  "status": "success",
+  "data": { "id": "...", "name": "John Doe" }
+}
+```
+
+Berhasil — kumpulan data (dibungkus nama koleksi):
+
+```json
+{
+  "status": "success",
+  "data": { "jobs": [] }
+}
+```
+
+Gagal karena kesalahan klien (`4xx`):
+
+```json
+{
+  "status": "failed",
+  "message": "\"email\" is required"
+}
+```
+
+Gagal karena kesalahan server (`5xx`):
+
+```json
+{
+  "status": "error",
+  "message": "Internal server error"
+}
+```
+
+### Kode status
+
+| Kode  | Kapan digunakan                                                  |
+| ----- | ---------------------------------------------------------------- |
+| `200` | Permintaan berhasil                                              |
+| `201` | Resource berhasil dibuat                                         |
+| `400` | Payload gagal validasi, JSON rusak, atau refresh token tidak sah  |
+| `401` | Token hilang/tidak valid, atau kredensial login salah            |
+| `404` | Resource atau route tidak ditemukan                              |
+| `500` | Kesalahan tak terduga di sisi server                             |
+
+Seluruh error dipusatkan di `src/middlewares/error.middleware.js`. Middleware ini
+memetakan `ClientError` ke status masing-masing, menerjemahkan kode error
+PostgreSQL (`23505` unique violation, `23503` foreign key violation, `22P02`
+invalid input syntax) menjadi `400`, dan menutup sisanya sebagai `500`. Pesan
+error asli hanya ditampilkan di luar mode produksi.
+
+---
+
+## Aturan Validasi
+
+Validasi payload dilakukan oleh middleware `validate(schema)` memakai **Joi**.
+Middleware ini berjalan setelah middleware auth, sehingga request tanpa token
+tetap dijawab `401` — bukan `400`. Field yang tidak dikenal dibuang dari payload.
+
+| Resource        | Field wajib                          | Catatan                                                     |
+| --------------- | ------------------------------------ | ----------------------------------------------------------- |
+| Register user   | `name`, `email`, `password`          | `name` min 3 karakter, `email` format valid, `password` min 6, `role` opsional (`user`/`admin`/`company`, default `user`) |
+| Login           | `email`, `password`                  | Password tidak dibatasi panjangnya agar kredensial salah menghasilkan `401`, bukan `400` |
+| Refresh/Logout  | `refreshToken`                       | —                                                           |
+| Company create  | `name`, `location`                   | `description` opsional                                      |
+| Company update  | minimal satu field                   | Mendukung pembaruan sebagian                                |
+| Category        | `name`                               | Tidak boleh string kosong                                   |
+| Job create      | `company_id`, `category_id`, `title` | Kedua id harus UUID v4; sisanya opsional                    |
+| Job update      | minimal satu field                   | Field yang tidak dikirim mempertahankan nilai lama          |
+| Application     | `job_id`                             | `user_id` pada body diabaikan — pelamar selalu diambil dari access token |
+| Update lamaran  | `status`                             | `pending`, `accepted`, atau `rejected`                      |
+
+Id berformat bukan UUID langsung dijawab tanpa menyentuh database: endpoint
+detail mengembalikan `404`, sedangkan endpoint daftar (`/applications/user/:userId`,
+`/jobs/company/:companyId`, `/jobs/category/:categoryId`) mengembalikan `200`
+dengan array kosong.
+
+---
+
+## Pengujian Postman
+
+Berkas koleksi dan environment tersedia pada
+`OpenJob RESTful API V1 Test.zip`.
+
+1. Ekstrak berkas zip.
+2. Import `[271] OpenJob API Test V1.postman_collection.json` ke Postman.
+3. Import `OpenJob API.postman_environment.json`, lalu pilih environment
+   **OpenJob API**.
+4. Sesuaikan variabel `port` bila server tidak berjalan di `3000`.
+5. Pastikan database sudah dimigrasi dan server sudah berjalan.
+6. Jalankan koleksi memakai **Collection Runner** secara berurutan dari atas ke
+   bawah — banyak request memakai variabel yang di-set oleh request sebelumnya.
+
+Disarankan menjalankan `npm run migrate:reset` sebelum pengujian agar database
+berada dalam keadaan bersih.
+
+---
+
+## Pemenuhan Kriteria Submission
+
+### Kriteria 1 — Menggunakan Database untuk Menyimpan Data
+
+| Ketentuan                                                     | Implementasi                                                    |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| Data disimpan di PostgreSQL                                   | `src/config/database.js` (connection pool `pg`)                 |
+| Pengelolaan tabel dengan `node-pg-migrate`                    | Direktori `migrations/`                                          |
+| Nama berkas migrasi berprefiks timestamp                      | Contoh: `1785167161186_create-table-users.js`                    |
+| Kredensial tidak hardcoded                                    | `.env` + `src/config/env.js`                                     |
+| Variabel `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `PGHOST`, `PGPORT` | Tersedia di `.env` dan `.env.example`                        |
+| Variabel `HOST` dan `PORT`                                    | Tersedia di `.env` dan `.env.example`                            |
+| Dijalankan dengan `npm run start:dev`                         | Terdaftar di `package.json`                                      |
+| Library data validation                                       | Joi                                                              |
+| Middleware validasi data dengan Joi                           | `src/middlewares/validate.middleware.js`                         |
+| Middleware error handling                                     | `src/middlewares/error.middleware.js`                            |
+| Unique constraint                                             | `users.email`, `categories.name`, `authentications.token`, `bookmarks(user_id, job_id)` |
+| Normalisasi & relasi antar tabel                              | 7 tabel dengan foreign key ber-`CASCADE`                         |
+| ERD dilampirkan                                               | `ERD-OpenJob-versi-1.png`                                        |
+| Query parameter `?title` dan `?company-name` pada `GET /jobs` | `src/repositories/jobs.repository.js`                            |
+
+### Kriteria 2 — Autentikasi dan Otorisasi
+
+| Ketentuan                                                | Implementasi                                             |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| Autentikasi memakai JWT (bukan session/cookie)           | `src/services/auth.service.js`                            |
+| Payload JWT berisi `id` user                             | `jwt.sign({ id: user.id }, ...)`                          |
+| Refresh token bersignature valid dan terdaftar di database | Tabel `authentications`                                 |
+| Middleware auth                                          | `src/middlewares/auth.middleware.js`                      |
+| Protected route `GET /profile`                           | `src/routes/profile.route.js`                             |
+| Protected route `GET /profile/applications`              | `src/routes/profile.route.js`                             |
+| Protected route `GET /profile/bookmarks`                 | `src/routes/profile.route.js`                             |
+| Secret key dari `ACCESS_TOKEN_KEY` & `REFRESH_TOKEN_KEY` | `src/config/env.js`                                       |
+| Access token berlaku 3 jam                               | `ACCESS_TOKEN_AGE=3h`                                     |
+
+---
+
+## Lisensi
+
+ISC — dikembangkan oleh [rothiii](https://github.com/Rothiii).
