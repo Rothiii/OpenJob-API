@@ -9,29 +9,33 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-	pgm.createTable("authentications", {
-		id: {
-			type: "uuid",
-			primaryKey: true,
-			notNull: true,
-      default: pgm.func("uuid_generate_v4()"),
-		},
-		token: {
-			type: "varchar(255)",
-			notNull: true,
-		},
-		user_id: {
-			type: "uuid",
-			notNull: true,
+  pgm.createTable('authentications', {
+    id: {
+      type: 'uuid',
+      primaryKey: true,
+      notNull: true,
+      default: pgm.func('uuid_generate_v4()'),
+    },
+    // A signed JWT easily exceeds 255 characters, so it needs an unbounded type.
+    token: {
+      type: 'text',
+      notNull: true,
+      unique: true,
+    },
+    user_id: {
+      type: 'uuid',
+      notNull: true,
       references: 'users',
-      onDelete: "CASCADE",
-		},
-		created_at: {
-			type: "timestamp",
-			notNull: true,
-			default: pgm.func("current_timestamp"),
-		},
-	});
+      onDelete: 'CASCADE',
+    },
+    created_at: {
+      type: 'timestamp',
+      notNull: true,
+      default: pgm.func('current_timestamp'),
+    },
+  });
+
+  pgm.createIndex('authentications', 'user_id');
 };
 
 /**
@@ -40,5 +44,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-	pgm.dropTable("authentications");
+  pgm.dropTable('authentications');
 };

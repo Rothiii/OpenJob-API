@@ -9,35 +9,38 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-  pgm.createTable("bookmarks", {
+  pgm.createTable('bookmarks', {
     id: {
-      type: "uuid",
+      type: 'uuid',
       primaryKey: true,
       notNull: true,
-      default: pgm.func("uuid_generate_v4()"),
+      default: pgm.func('uuid_generate_v4()'),
     },
     user_id: {
-      type: "uuid",
+      type: 'uuid',
       notNull: true,
       references: 'users',
-      onDelete: "CASCADE",
+      onDelete: 'CASCADE',
     },
     job_id: {
-      type: "uuid",
+      type: 'uuid',
       notNull: true,
       references: 'jobs',
-      onDelete: "CASCADE",
+      onDelete: 'CASCADE',
     },
     created_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
   });
 
-  pgm.addConstraint("bookmarks", "unique_user_job", {
-    unique: ["user_id", "job_id"],
+  // A user can bookmark a job only once.
+  pgm.addConstraint('bookmarks', 'unique_user_job', {
+    unique: ['user_id', 'job_id'],
   });
+
+  pgm.createIndex('bookmarks', 'job_id');
 };
 
 /**
@@ -46,5 +49,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-  pgm.dropTable("bookmarks");
+  pgm.dropTable('bookmarks');
 };

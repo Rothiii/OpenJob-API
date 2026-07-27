@@ -9,41 +9,45 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-  pgm.createTable("applications", {
+  pgm.createTable('applications', {
     id: {
-      type: "uuid",
+      type: 'uuid',
       primaryKey: true,
       notNull: true,
-      default: pgm.func("uuid_generate_v4()"),
+      default: pgm.func('uuid_generate_v4()'),
     },
     user_id: {
-      type: "uuid",
+      type: 'uuid',
       notNull: true,
       references: 'users',
-      onDelete: "CASCADE",
+      onDelete: 'CASCADE',
     },
     job_id: {
-      type: "uuid",
+      type: 'uuid',
       notNull: true,
       references: 'jobs',
-      onDelete: "CASCADE",
+      onDelete: 'CASCADE',
     },
     status: {
-      type: "varchar(50)",
+      type: 'varchar(50)',
       notNull: true,
-      default: "pending",
+      default: 'pending',
     },
     created_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
     updated_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
   });
+
+  // Both columns back their own listing endpoint.
+  pgm.createIndex('applications', 'user_id');
+  pgm.createIndex('applications', 'job_id');
 };
 
 /**
@@ -52,5 +56,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-  pgm.dropTable("applications");
+  pgm.dropTable('applications');
 };

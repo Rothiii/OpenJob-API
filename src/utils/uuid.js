@@ -1,9 +1,9 @@
-const { randomUUID } = require('crypto');
+import { randomUUID } from 'node:crypto';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const isUuid = (value) => typeof value === 'string' && UUID_REGEX.test(value);
+export const isUuid = (value) =>
+  typeof value === 'string' && UUID_REGEX.test(value);
 
-const generateId = () => randomUUID();
-
-module.exports = { isUuid, generateId };
+export const generateId = () => randomUUID();

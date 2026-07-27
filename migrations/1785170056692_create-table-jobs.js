@@ -9,71 +9,75 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-	pgm.createTable("jobs", {
+  pgm.createTable('jobs', {
     id: {
-      type: "uuid",
+      type: 'uuid',
       primaryKey: true,
       notNull: true,
-      default: pgm.func("uuid_generate_v4()"),
+      default: pgm.func('uuid_generate_v4()'),
     },
     company_id: {
-      type: "uuid",
+      type: 'uuid',
       notNull: true,
       references: 'companies',
-      onDelete: "CASCADE",
+      onDelete: 'CASCADE',
     },
     category_id: {
-      type: "uuid",
+      type: 'uuid',
       notNull: true,
       references: 'categories',
-      onDelete: "CASCADE",
+      onDelete: 'CASCADE',
     },
     title: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
       notNull: true,
     },
     description: {
-      type: "text",
+      type: 'text',
     },
     job_type: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
     },
     experience_level: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
     },
     location_type: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
     },
     location_city: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
     },
     salary_min: {
-      type: "integer",
+      type: 'integer',
     },
     salary_max: {
-      type: "integer",
+      type: 'integer',
     },
     is_salary_visible: {
-      type: "boolean",
+      type: 'boolean',
       notNull: true,
       default: false,
     },
     status: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
       notNull: true,
-      default: "draft",
+      default: 'draft',
     },
     created_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
     updated_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
   });
+
+  // Foreign keys are not indexed automatically; both are used as filters.
+  pgm.createIndex('jobs', 'company_id');
+  pgm.createIndex('jobs', 'category_id');
 };
 
 /**
@@ -81,4 +85,6 @@ export const up = (pgm) => {
  * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
-export const down = (pgm) => {};
+export const down = (pgm) => {
+  pgm.dropTable('jobs');
+};

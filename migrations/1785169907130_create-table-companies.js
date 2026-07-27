@@ -9,32 +9,32 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-  pgm.createTable("companies", {
+  pgm.createTable('companies', {
     id: {
-      type: "uuid",
+      type: 'uuid',
       primaryKey: true,
       notNull: true,
-      default: pgm.func("uuid_generate_v4()")
+      default: pgm.func('uuid_generate_v4()'),
     },
     name: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
       notNull: true,
     },
     location: {
-      type: "varchar(255)",
+      type: 'varchar(255)',
     },
     description: {
-      type: "text",
+      type: 'text',
     },
     created_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
     updated_at: {
-      type: "timestamp",
+      type: 'timestamp',
       notNull: true,
-      default: pgm.func("current_timestamp"),
+      default: pgm.func('current_timestamp'),
     },
   });
 };
@@ -45,5 +45,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-  pgm.dropTable("companies");
+  pgm.dropTable('companies');
 };
