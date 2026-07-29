@@ -17,7 +17,9 @@
     "migrate:create": "node-pg-migrate create",
     "migrate:up": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
-    "migrate:reset": "node-pg-migrate down 0 && node-pg-migrate up"
+    "migrate:reset": "node-pg-migrate down 0 && node-pg-migrate up",
+    "consumer": "node src/consumer.js",
+    "consumer:dev": "nodemon src/consumer.js"
   },
   "repository": {
     "type": "git",
@@ -38,6 +40,7 @@
     "joi": "^18.2.3",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
+    "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
     "redis": "^6.1.0"
   },
