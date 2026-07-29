@@ -44,6 +44,23 @@ export const env = {
   ACCESS_TOKEN_KEY: get('ACCESS_TOKEN_KEY'),
   REFRESH_TOKEN_KEY: get('REFRESH_TOKEN_KEY'),
   ACCESS_TOKEN_AGE: get('ACCESS_TOKEN_AGE', '3h'),
+
+  REDIS_HOST: get('REDIS_HOST', 'localhost'),
+  REDIS_PORT: getNumber('REDIS_PORT', '6379'),
+  REDIS_PASSWORD: process.env.REDIS_PASSWORD ?? '',
+
+  RABBITMQ_HOST: get('RABBITMQ_HOST', 'localhost'),
+  RABBITMQ_PORT: getNumber('RABBITMQ_PORT', '5672'),
+  RABBITMQ_USER: get('RABBITMQ_USER', 'guest'),
+  RABBITMQ_PASSWORD: get('RABBITMQ_PASSWORD', 'guest'),
+  // Optional shortcut: when set it wins over the individual RABBITMQ_* parts.
+  AMQP_URL: process.env.AMQP_URL ?? '',
+
+  MAIL_HOST: get('MAIL_HOST', 'localhost'),
+  MAIL_PORT: getNumber('MAIL_PORT', '587'),
+  MAIL_USER: process.env.MAIL_USER ?? '',
+  MAIL_PASSWORD: process.env.MAIL_PASSWORD ?? '',
+  MAIL_FROM: process.env.MAIL_FROM ?? '',
 };
 
 env.isProduction = env.NODE_ENV === 'production';
