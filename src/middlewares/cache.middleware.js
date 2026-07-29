@@ -1,38 +1,38 @@
-import { getCache, setCache } from "../utils/redis.js";
+import { getCache, setCache, DEFAULT_TTL } from '../utils/redis.js';
 
-export const cacheMiddleware = (options = {}) => {
-	return async (req, res, next) => {
-		if (req.method !== "GET") {
-			return next();
-		}
+/**
+ * Caches successful GET responses in Redis for one hour and reports where the
+ * body came from through the `X-Data-Source` header.
+ *
+ * @param key  a string, or a function of the request for per-user keys
+ * @param ttl  lifetime in seconds
+ */
+export const cache = (key, ttl = DEFAULT_TTL) => {
+  const resolveKey = typeof key === 'function' ? key : () => key;
 
-		const cacheKey = options.key || `route:${req.originalUrl}`;
-		const ex = options.ex || 3600; // Default 1 hour
+  return async (req, res, next) => {
+    if (req.method !== 'GET') return next();
 
-		try {
-			const cachedData = await getCache(cacheKey);
-			if (cachedData) {
-				res.setHeader("X-Data-Source", "cache");
-				return res.json(cachedData);
-			}
-		} catch (err) {
-			console.error("Cache error:", err);
-		}
+    const cacheKey = resolveKey(req);
 
-		res.setHeader("X-Data-Source", "database");
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      res.setHeader('X-Data-Source', 'cache');
+      return res.json(cached);
+    }
 
-		const originalJson = res.json.bind(res);
-		res.json = function (data) {
-			if (res.statusCode < 400) {
-				setCache(cacheKey, data, ex).catch((err) =>
-					console.error("Error caching response:", err),
-				);
-			}
-			return originalJson(data);
-		};
+    res.setHeader('X-Data-Source', 'database');
 
-		next();
-	};
+    // Store whatever the controller ends up sending, but only when it succeeded.
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      if (res.statusCode < 400) setCache(cacheKey, body, ttl);
+
+      return originalJson(body);
+    };
+
+    return next();
+  };
 };
 
-export default cacheMiddleware;
+export default cache;

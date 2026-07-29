@@ -1,62 +1,61 @@
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import { sendResponse } from "../utils/response.js";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import multer from 'multer';
+import { InvariantError } from '../errors/index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const uploadDir = path.join(__dirname, "../../uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+export const UPLOAD_DIR = path.join(__dirname, '../../uploads');
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype !== "application/pdf") {
-    return cb(
-      new Error("File harus berformat PDF. MIME type tidak valid"),
-      false,
-    );
-  }
-  cb(null, true);
-};
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, unique + path.extname(file.originalname));
+    cb(null, `${unique}${path.extname(file.originalname) || '.pdf'}`);
   },
 });
+
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype !== 'application/pdf') {
+    return cb(
+      new InvariantError('File is required and must be a PDF document'),
+      false
+    );
+  }
+
+  return cb(null, true);
+};
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: MAX_FILE_SIZE },
 });
 
-export const uploadWrapper = (req, res, next) => {
-  upload.single("document")(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return sendResponse(res, {
-          status: "failed",
-          statusCode: 400,
-          message: "Ukuran file terlalu besar. Maksimal 5 MB",
-        });
-      }
-      return sendResponse(res, {
-        status: "failed",
-        statusCode: 400,
-        message: err.message,
-      });
-    } else if (err) {
-      return sendResponse(res, {
-        status: "failed",
-        statusCode: 400,
-        message: err.message,
-      });
+/**
+ * Wraps multer so its own errors come back through the app's error handler in
+ * the standard JSON shape instead of multer's default HTML response.
+ */
+export const uploadDocument = (req, res, next) => {
+  upload.single('document')(req, res, (error) => {
+    if (error instanceof multer.MulterError) {
+      const message =
+        error.code === 'LIMIT_FILE_SIZE'
+          ? 'File size is too large. Maximum size is 5 MB'
+          : error.message;
+
+      return next(new InvariantError(message));
     }
-    next();
+
+    if (error) return next(error);
+
+    if (!req.file) return next(new InvariantError('File is required'));
+
+    return next();
   });
 };
 
