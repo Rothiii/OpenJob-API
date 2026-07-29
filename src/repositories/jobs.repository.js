@@ -1,7 +1,12 @@
 import { query } from '../config/database.js';
 
+// Exactly the fields a job listing needs: the job itself plus the company name
+// it is filtered and searched by. Timestamps stay out of the listing payload.
 const SELECT_JOB = `
-  SELECT j.*, c.name AS company_name, cat.name AS category_name
+  SELECT j.id, j.company_id, c.name AS company_name, j.category_id,
+         j.title, j.description, j.job_type, j.experience_level,
+         j.location_type, j.location_city, j.salary_min, j.salary_max,
+         j.status
   FROM jobs j
   JOIN companies c ON j.company_id = c.id
   JOIN categories cat ON j.category_id = cat.id

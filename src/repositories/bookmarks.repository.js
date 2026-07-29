@@ -2,9 +2,17 @@ import { query } from '../config/database.js';
 
 export const findByUserId = async (userId) => {
   const result = await query(
-    `SELECT b.id, b.job_id, j.title, j.company_id, j.category_id, b.created_at
+    `SELECT b.id, b.user_id, b.created_at,
+            b.job_id, j.title AS job_title, j.description AS job_description,
+            j.job_type, j.experience_level, j.location_type, j.location_city,
+            j.salary_min, j.salary_max, j.is_salary_visible,
+            j.status AS job_status,
+            j.company_id, c.name AS company_name,
+            j.category_id, cat.name AS category_name
      FROM bookmarks b
      JOIN jobs j ON b.job_id = j.id
+     JOIN companies c ON j.company_id = c.id
+     JOIN categories cat ON j.category_id = cat.id
      WHERE b.user_id = $1
      ORDER BY b.created_at DESC`,
     [userId]

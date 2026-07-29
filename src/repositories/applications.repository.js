@@ -1,11 +1,14 @@
 import { query } from '../config/database.js';
 
 const SELECT_APPLICATION = `
-  SELECT a.id, a.status, a.user_id, u.name AS user_name,
-         a.job_id, j.title AS job_title, a.created_at, a.updated_at
+  SELECT a.id, a.status, a.user_id, u.name AS user_name, u.email AS user_email,
+         a.job_id, j.title AS job_title, j.job_type,
+         j.company_id, c.name AS company_name, j.category_id,
+         a.created_at, a.updated_at
   FROM applications a
   JOIN users u ON a.user_id = u.id
   JOIN jobs j ON a.job_id = j.id
+  JOIN companies c ON j.company_id = c.id
 `;
 
 export const findAll = async () => {
@@ -37,10 +40,13 @@ export const findByJobId = async (jobId) => {
 /** Applications joined with job details, used by the profile endpoints. */
 export const findDetailedByUserId = async (userId) => {
   const result = await query(
-    `SELECT a.id, a.status, a.job_id, j.title, j.company_id, j.category_id,
-            a.created_at
+    `SELECT a.id, a.user_id, a.job_id, a.status, a.created_at, a.updated_at,
+            j.title AS job_title, j.description AS job_description,
+            j.job_type, j.experience_level, j.location_type, j.location_city,
+            j.company_id, c.name AS company_name, j.category_id
      FROM applications a
      JOIN jobs j ON a.job_id = j.id
+     JOIN companies c ON j.company_id = c.id
      WHERE a.user_id = $1
      ORDER BY a.created_at DESC`,
     [userId]
