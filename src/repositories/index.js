@@ -5,3 +5,4 @@ export * as categoriesRepository from './categories.repository.js';
 export * as jobsRepository from './jobs.repository.js';
 export * as applicationsRepository from './applications.repository.js';
 export * as bookmarksRepository from './bookmarks.repository.js';
+export * as documentsRepository from './documents.repository.js';

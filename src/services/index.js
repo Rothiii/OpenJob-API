@@ -6,3 +6,4 @@ export * as jobsService from './jobs.service.js';
 export * as applicationsService from './applications.service.js';
 export * as bookmarksService from './bookmarks.service.js';
 export * as profileService from './profile.service.js';
+export * as documentsService from './documents.service.js';

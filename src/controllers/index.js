@@ -6,3 +6,4 @@ export * as jobsController from './jobs.controller.js';
 export * as applicationsController from './applications.controller.js';
 export * as bookmarksController from './bookmarks.controller.js';
 export * as profileController from './profile.controller.js';
+export * as documentsController from './documents.controller.js';

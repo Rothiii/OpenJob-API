@@ -7,6 +7,7 @@ import jobsRoute from './jobs.route.js';
 import applicationsRoute from './applications.route.js';
 import bookmarksRoute from './bookmarks.route.js';
 import profileRoute from './profile.route.js';
+import documentsRoute from './documents.route.js';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/jobs', jobsRoute);
 router.use('/applications', applicationsRoute);
 router.use('/bookmarks', bookmarksRoute);
 router.use('/profile', profileRoute);
+router.use('/documents', documentsRoute);
 
 export default router;
