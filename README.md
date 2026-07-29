@@ -201,6 +201,25 @@ PGDATABASE=openjob
 ACCESS_TOKEN_KEY=
 REFRESH_TOKEN_KEY=
 ACCESS_TOKEN_AGE=3h
+
+# Redis cache
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# RabbitMQ — AMQP_URL opsional dan menang atas variabel di atasnya
+RABBITMQ_HOST=localhost
+RABBITMQ_PORT=5672
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+AMQP_URL=
+
+# Mail (dipakai program consumer)
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USER=
+MAIL_PASSWORD=
+MAIL_FROM=
 ```
 
 | Variabel            | Wajib | Default     | Keterangan                              |
@@ -216,6 +235,19 @@ ACCESS_TOKEN_AGE=3h
 | `ACCESS_TOKEN_KEY`  | ya    | —           | Secret key access token                 |
 | `REFRESH_TOKEN_KEY` | ya    | —           | Secret key refresh token                |
 | `ACCESS_TOKEN_AGE`  | tidak | 3h          | Masa berlaku access token               |
+| `REDIS_HOST`        | tidak | localhost   | Host Redis untuk caching                |
+| `REDIS_PORT`        | tidak | 6379        | Port Redis                              |
+| `REDIS_PASSWORD`    | tidak | (kosong)    | Password Redis bila diaktifkan          |
+| `RABBITMQ_HOST`     | tidak | localhost   | Host RabbitMQ                           |
+| `RABBITMQ_PORT`     | tidak | 5672        | Port RabbitMQ                           |
+| `RABBITMQ_USER`     | tidak | guest       | User RabbitMQ                           |
+| `RABBITMQ_PASSWORD` | tidak | guest       | Password RabbitMQ                       |
+| `AMQP_URL`          | tidak | (kosong)    | URL AMQP utuh; menimpa `RABBITMQ_*`     |
+| `MAIL_HOST`         | tidak | localhost   | Host SMTP untuk notifikasi consumer     |
+| `MAIL_PORT`         | tidak | 587         | Port SMTP                               |
+| `MAIL_USER`         | tidak | (kosong)    | User SMTP                               |
+| `MAIL_PASSWORD`     | tidak | (kosong)    | Password SMTP                           |
+| `MAIL_FROM`         | tidak | `MAIL_USER` | Alamat pengirim email notifikasi        |
 
 Kredensial tidak pernah ditulis di dalam kode. `src/config/env.js` membaca seluruh
 variabel di atas dan **menghentikan proses saat startup** jika ada variabel wajib
@@ -285,6 +317,8 @@ curl http://localhost:3000/health
 | `npm run migrate:down`   | Membatalkan satu migrasi terakhir               |
 | `npm run migrate:reset`  | Reset seluruh skema database                    |
 | `npm run migrate:create` | Membuat berkas migrasi baru                     |
+| `npm run consumer`       | Menjalankan consumer RabbitMQ (pengirim email)  |
+| `npm run consumer:dev`   | Consumer dengan nodemon (development)           |
 
 ---
 
@@ -339,6 +373,8 @@ access token pada header.
 | GET    | `/jobs/:id`                     | Detail lowongan                |
 | GET    | `/jobs/company/:companyId`      | Lowongan berdasarkan perusahaan |
 | GET    | `/jobs/category/:categoryId`    | Lowongan berdasarkan kategori  |
+| GET    | `/documents`                    | Daftar dokumen yang diunggah   |
+| GET    | `/documents/:id`                | Menampilkan berkas PDF         |
 | GET    | `/health`                       | Status server                  |
 
 ### Protected (butuh `Authorization: Bearer <access_token>`)
@@ -364,6 +400,8 @@ access token pada header.
 | GET    | `/applications/user/:userId`    | Lamaran berdasarkan user           |
 | GET    | `/applications/job/:jobId`      | Lamaran berdasarkan lowongan       |
 | PUT    | `/applications/:id`             | Ubah status lamaran                |
+| POST   | `/documents`                    | Unggah dokumen PDF (field `document`) |
+| DELETE | `/documents/:id`                | Hapus dokumen milik sendiri        |
 | DELETE | `/applications/:id`             | Hapus lamaran                      |
 | POST   | `/jobs/:jobId/bookmark`         | Simpan lowongan                    |
 | GET    | `/jobs/:jobId/bookmark/:id`     | Detail bookmark                    |
@@ -491,6 +529,11 @@ Berkas koleksi dan environment tersedia pada
 Disarankan menjalankan `npm run migrate:reset` sebelum pengujian agar database
 berada dalam keadaan bersih.
 
+Untuk versi 2, koleksinya adalah `OpenJob RESTful API V2 Test.zip`. Folder
+**[Mandatory] Documents** tidak boleh ikut dijalankan lewat Collection Runner —
+request unggah berkas harus dijalankan manual dengan memilih berkas PDF pada
+field `document`.
+
 ---
 
 ## Pemenuhan Kriteria Submission
@@ -527,6 +570,75 @@ berada dalam keadaan bersih.
 | Protected route `GET /profile/bookmarks`                 | `src/routes/profile.route.js`                             |
 | Secret key dari `ACCESS_TOKEN_KEY` & `REFRESH_TOKEN_KEY` | `src/config/env.js`                                       |
 | Access token berlaku 3 jam                               | `ACCESS_TOKEN_AGE=3h`                                     |
+
+---
+
+## Submission Versi 2
+
+### Layanan pendukung
+
+Selain PostgreSQL, versi 2 membutuhkan **Redis** dan **RabbitMQ** berjalan
+lokal. Program consumer dijalankan pada terminal terpisah dari server:
+
+```bash
+npm run start:dev   # terminal 1 — REST API
+npm run consumer    # terminal 2 — consumer RabbitMQ + pengirim email
+```
+
+Server tetap melayani permintaan meski Redis atau RabbitMQ mati: cache akan
+selalu meleset ke database, dan publish message hanya dicatat di log.
+
+### Kriteria 1 — Unggah Berkas Dokumen PDF
+
+| Ketentuan                          | Implementasi                                                     |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| Unggah berkas PDF                  | `POST /documents` (form-data, field `document`)                   |
+| Library multer                     | `src/middlewares/upload.middleware.js`                            |
+| Validasi ukuran maksimal 5 MB      | `limits.fileSize` pada multer                                     |
+| Validasi MIME type                 | `fileFilter` menolak selain `application/pdf`                     |
+| Nama berkas disimpan di tabel      | Tabel `documents` (`filename`, `original_filename`, `file_path`)  |
+| Menampilkan berkas yang diunggah   | `GET /documents/:id` mengirim PDF beserta `Content-Disposition`    |
+
+Berkas fisik disimpan di direktori `uploads/` (di-`gitignore`) dengan nama unik,
+sementara nama asli tetap dicatat di database untuk keperluan unduhan.
+
+### Kriteria 2 — Caching dengan Redis
+
+| Ketentuan                             | Implementasi                                              |
+| ------------------------------------- | ---------------------------------------------------------- |
+| Caching memakai Redis                 | `src/utils/redis.js`, `src/middlewares/cache.middleware.js` |
+| Masa simpan cache 1 jam               | `DEFAULT_TTL = 3600`                                        |
+| Kredensial di environment variables   | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`                |
+| Header `X-Data-Source: cache`         | Diset saat cache hit; `database` saat miss                  |
+
+Endpoint yang di-cache: `GET /companies/:id`, `GET /users/:id`,
+`GET /applications/:id`, `GET /applications/user/:userId`,
+`GET /applications/job/:jobId`, dan `GET /bookmarks` (kunci per user).
+
+Invalidasi cache dilakukan di service, satu keluarga kunci sekaligus:
+
+| Aksi                                  | Kunci yang dihapus |
+| ------------------------------------- | ------------------ |
+| CREATE/UPDATE/DELETE perusahaan       | `companies:*`      |
+| CREATE/UPDATE/DELETE lamaran          | `applications:*`   |
+| CREATE/DELETE bookmark                | `bookmarks:user:<id>` |
+
+### Kriteria 3 — Message Queue dengan RabbitMQ
+
+| Ketentuan                                   | Implementasi                                          |
+| ------------------------------------------- | ------------------------------------------------------ |
+| Publish saat kandidat melamar               | `src/services/applications.service.js`                  |
+| Payload hanya `application_id`              | `publishToQueue({ application_id })`                    |
+| Program consumer asynchronous               | `src/consumer.js` (`npm run consumer`)                  |
+| Kredensial di environment variables         | `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, opsional `AMQP_URL` |
+| Pengiriman email memakai Nodemailer         | `src/utils/mailer.js`                                   |
+| Kredensial email di environment variables   | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD`  |
+| Email dikirim ke pemilik lowongan           | `applications.repository.findNotificationDetails()` menelusuri lamaran → lowongan → perusahaan → pemilik |
+| Isi email diambil dari database             | Nama pelamar, email pelamar, dan tanggal lamaran        |
+
+Kepemilikan lowongan berasal dari kolom `companies.user_id`, yaitu user yang
+membuat perusahaan tersebut. Publish berjalan di luar jalur respons sehingga
+pelamar tidak menunggu proses email.
 
 ---
 

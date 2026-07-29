@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as applicationsController from '../controllers/applications.controller.js';
-import { authenticate, validate } from '../middlewares/index.js';
+import { authenticate, cache, validate } from '../middlewares/index.js';
+import { cacheKeys } from '../utils/cacheKeys.js';
 import {
   createApplicationSchema,
   updateApplicationSchema,
@@ -12,9 +13,21 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', applicationsController.getAll);
-router.get('/user/:userId', applicationsController.getByUserId);
-router.get('/job/:jobId', applicationsController.getByJobId);
-router.get('/:id', applicationsController.getById);
+router.get(
+  '/user/:userId',
+  cache((req) => cacheKeys.applicationsByUser(req.params.userId)),
+  applicationsController.getByUserId
+);
+router.get(
+  '/job/:jobId',
+  cache((req) => cacheKeys.applicationsByJob(req.params.jobId)),
+  applicationsController.getByJobId
+);
+router.get(
+  '/:id',
+  cache((req) => cacheKeys.applicationDetail(req.params.id)),
+  applicationsController.getById
+);
 
 router.post(
   '/',

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as companiesController from '../controllers/companies.controller.js';
-import { authenticate, validate } from '../middlewares/index.js';
+import { authenticate, cache, validate } from '../middlewares/index.js';
+import { cacheKeys } from '../utils/cacheKeys.js';
 import {
   createCompanySchema,
   updateCompanySchema,
@@ -9,7 +10,11 @@ import {
 const router = Router();
 
 router.get('/', companiesController.getAll);
-router.get('/:id', companiesController.getById);
+router.get(
+  '/:id',
+  cache((req) => cacheKeys.companyDetail(req.params.id)),
+  companiesController.getById
+);
 
 router.post(
   '/',

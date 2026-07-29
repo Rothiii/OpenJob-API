@@ -10,12 +10,12 @@ export const findById = async (id) => {
   return result.rows[0] ?? null;
 };
 
-export const insert = async ({ id, name, location, description }) => {
+export const insert = async ({ id, name, location, description, userId }) => {
   const result = await query(
-    `INSERT INTO companies (id, name, location, description)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO companies (id, name, location, description, user_id)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [id, name, location, description]
+    [id, name, location, description, userId]
   );
   return result.rows[0];
 };

@@ -13,7 +13,10 @@ export const getById = async (req, res) => {
 };
 
 export const create = async (req, res) => {
-  const company = await companiesService.create(req.body);
+  const company = await companiesService.create({
+    ...req.body,
+    userId: req.user.id,
+  });
 
   res.status(201).json({ status: 'success', data: company });
 };
