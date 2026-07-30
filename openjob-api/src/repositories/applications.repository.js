@@ -62,27 +62,6 @@ export const findByUserAndJob = async ({ userId, jobId }) => {
   return result.rows[0] ?? null;
 };
 
-/** Everything the notification consumer needs, in one round trip. */
-export const findNotificationDetails = async (id) => {
-  const result = await query(
-    `SELECT a.id AS application_id, a.status, a.created_at AS applied_at,
-            applicant.id AS applicant_id, applicant.name AS applicant_name,
-            applicant.email AS applicant_email,
-            j.id AS job_id, j.title AS job_title,
-            c.id AS company_id, c.name AS company_name,
-            owner.id AS owner_id, owner.name AS owner_name,
-            owner.email AS owner_email
-     FROM applications a
-     JOIN users applicant ON a.user_id = applicant.id
-     JOIN jobs j ON a.job_id = j.id
-     JOIN companies c ON j.company_id = c.id
-     LEFT JOIN users owner ON c.user_id = owner.id
-     WHERE a.id = $1`,
-    [id]
-  );
-  return result.rows[0] ?? null;
-};
-
 export const insert = async ({ id, userId, jobId, status }) => {
   const result = await query(
     `INSERT INTO applications (id, user_id, job_id, status)

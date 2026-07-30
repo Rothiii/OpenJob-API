@@ -1,7 +1,7 @@
 {
   "name": "openjob-api",
   "version": "1.0.0",
-  "description": "submission pertama fundamental backend dengan javascript",
+  "description": "OpenJob RESTful API \u2014 submission Fundamental Back-End dengan JavaScript",
   "main": "src/server.js",
   "type": "module",
   "engines": {
@@ -17,9 +17,7 @@
     "migrate:create": "node-pg-migrate create",
     "migrate:up": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
-    "migrate:reset": "node-pg-migrate down 0 && node-pg-migrate up",
-    "consumer": "node src/consumer.js",
-    "consumer:dev": "nodemon src/consumer.js"
+    "migrate:reset": "node-pg-migrate down 0 && node-pg-migrate up"
   },
   "repository": {
     "type": "git",
@@ -40,7 +38,6 @@
     "joi": "^18.2.3",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
-    "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
     "redis": "^6.1.0"
   },

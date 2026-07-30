@@ -1,0 +1,30 @@
+{
+  "name": "openjob-consumer",
+  "version": "1.0.0",
+  "description": "Consumer notifikasi lamaran OpenJob — mendengarkan RabbitMQ dan mengirim email ke pemilik lowongan",
+  "main": "src/consumer.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/consumer.js",
+    "start:dev": "nodemon src/consumer.js",
+    "dev": "nodemon src/consumer.js",
+    "lint": "eslint src"
+  },
+  "author": "rothiii",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^2.0.1",
+    "dotenv": "^17.4.2",
+    "nodemailer": "^9.0.3",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
+    "nodemon": "^3.1.14"
+  }
+}

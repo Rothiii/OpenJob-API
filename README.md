@@ -1,9 +1,21 @@
-# OpenJob RESTful API — Versi 1
+# OpenJob RESTful API — Versi 2
 
 RESTful API untuk aplikasi rekrutmen internal perusahaan. Menangani data lowongan
-kerja, lamaran, profil kandidat, profil perusahaan, kategori, dan bookmark.
+kerja, lamaran, profil kandidat, profil perusahaan, kategori, bookmark, dan
+unggahan dokumen PDF.
 
 Submission kelas **Back-End Fundamental dengan JavaScript** — Dicoding.
+
+Repositori ini berisi **dua proyek yang berdiri sendiri**, masing-masing dengan
+`package.json` dan `.env` sendiri:
+
+| Proyek              | Peran                                                          |
+| ------------------- | -------------------------------------------------------------- |
+| `openjob-api/`      | HTTP server. Menerima request, menulis database, mem-*publish* pesan ke RabbitMQ. |
+| `openjob-consumer/` | Proses terpisah. Meng-*consume* pesan dari RabbitMQ lalu mengirim email notifikasi. |
+
+Keduanya tidak saling meng-import kode. Penghubungnya hanya **RabbitMQ** (antrean
+pesan) dan **PostgreSQL** (database yang sama).
 
 ---
 
@@ -28,80 +40,110 @@ Submission kelas **Back-End Fundamental dengan JavaScript** — Dicoding.
 
 ## Tech Stack
 
-| Komponen        | Teknologi                  |
-| --------------- | -------------------------- |
-| Runtime         | Node.js >= 20 (ESM)        |
-| Framework       | Express 5                  |
-| Database        | PostgreSQL                 |
-| Database Client | `pg` (connection pool)     |
-| Migration       | `node-pg-migrate`          |
-| Validasi        | Joi                        |
-| Autentikasi     | JWT (`jsonwebtoken`)       |
-| Hashing         | bcrypt                     |
-| Konfigurasi     | dotenv                     |
-| Linter          | ESLint                     |
+| Komponen        | Teknologi                  | Dipakai di          |
+| --------------- | -------------------------- | ------------------- |
+| Runtime         | Node.js >= 20 (ESM)        | keduanya            |
+| Framework       | Express 5                  | api                 |
+| Database        | PostgreSQL                 | keduanya            |
+| Database Client | `pg` (connection pool)     | keduanya            |
+| Migration       | `node-pg-migrate`          | api                 |
+| Cache           | Redis (`redis`)            | api                 |
+| Message Queue   | RabbitMQ (`amqplib`)       | keduanya            |
+| Upload berkas   | `multer`                   | api                 |
+| Email           | `nodemailer`               | consumer            |
+| Validasi        | Joi                        | api                 |
+| Autentikasi     | JWT (`jsonwebtoken`)       | api                 |
+| Hashing         | bcrypt                     | api                 |
+| Konfigurasi     | dotenv                     | keduanya            |
+| Linter          | ESLint                     | keduanya            |
 
 ---
 
 ## Struktur Proyek
 
-Aplikasi dipisah menjadi beberapa lapisan agar setiap berkas punya satu tanggung
-jawab: **route → controller → service → repository**.
+Dua proyek terpisah di dalam satu repositori. Di dalam API, kode dipisah menjadi
+beberapa lapisan agar setiap berkas punya satu tanggung jawab:
+**route → controller → service → repository**.
 
 ```
 OpenJob-API/
-├── ERD-OpenJob-versi-1.png        # Entity Relationship Diagram
-├── eslint.config.js
-├── package.json
-├── .env                           # kredensial lokal (tidak di-commit)
-├── .env.example                   # template environment variable
-├── migrations/                    # node-pg-migrate, berprefiks timestamp
-│   ├── 1785166161186_uuid-extentions.js
-│   ├── 1785167161186_create-table-users.js
-│   ├── 1785169855217_create-table-authentications.js
-│   ├── 1785169900643_create-table-categories.js
-│   ├── 1785169907130_create-table-companies.js
-│   ├── 1785170056692_create-table-jobs.js
-│   ├── 1785170063921_create-table-bookmarks.js
-│   └── 1785170071904_create-table-applications.js
-└── src/
-    ├── app.js                     # instance Express + middleware global
-    ├── server.js                  # HTTP listener + graceful shutdown
-    ├── config/
-    │   ├── env.js                 # pembacaan & validasi environment variable
-    │   └── database.js            # PostgreSQL connection pool
-    ├── routes/                    # definisi endpoint
-    │   ├── index.js               # barrel: memasang seluruh sub-router
-    │   ├── users.route.js
-    │   ├── auth.route.js
-    │   ├── companies.route.js
-    │   ├── categories.route.js
-    │   ├── jobs.route.js
-    │   ├── applications.route.js
-    │   ├── bookmarks.route.js
-    │   └── profile.route.js
-    ├── controllers/               # membaca request, mengirim response
-    │   ├── index.js
-    │   └── *.controller.js
-    ├── services/                  # aturan bisnis, melempar error domain
-    │   ├── index.js
-    │   └── *.service.js
-    ├── repositories/              # satu-satunya lapisan yang menulis SQL
-    │   ├── index.js
-    │   └── *.repository.js
-    ├── validators/                # skema Joi
-    │   ├── index.js
-    │   ├── *.validator.js
-    │   └── common/                # skema yang dipakai ulang (uuid, password)
-    ├── middlewares/
-    │   ├── index.js
-    │   ├── auth.middleware.js     # verifikasi Bearer access token
-    │   ├── validate.middleware.js # validasi payload dengan Joi
-    │   ├── notFound.middleware.js # route tidak dikenal → 404
-    │   └── error.middleware.js    # error handler terpusat
-    ├── errors/                    # ClientError, NotFoundError, dll.
-    └── utils/
-        └── uuid.js
+├── README.md
+├── ERD-OpenJob-versi-1.png            # ERD submission versi 1
+├── ERD-OpenJob-versi-2.png            # ERD terbaru (+ documents, companies.user_id)
+├── OpenJob RESTful API V2 Test.zip    # collection & environment Postman
+│
+├── openjob-api/                       # ── PROYEK 1: HTTP server ──
+│   ├── package.json
+│   ├── eslint.config.js
+│   ├── .env                           # kredensial lokal (tidak di-commit)
+│   ├── .env.example
+│   ├── uploads/                       # berkas PDF hasil unggahan (tidak di-commit)
+│   ├── migrations/                    # node-pg-migrate, berprefiks timestamp
+│   │   ├── 1785166161186_uuid-extentions.js
+│   │   ├── 1785167161186_create-table-users.js
+│   │   ├── 1785169855217_create-table-authentications.js
+│   │   ├── 1785169900643_create-table-categories.js
+│   │   ├── 1785169907130_create-table-companies.js
+│   │   ├── 1785170056692_create-table-jobs.js
+│   │   ├── 1785170063921_create-table-bookmarks.js
+│   │   ├── 1785170071904_create-table-applications.js
+│   │   ├── 1785337892869_create-table-documents.js
+│   │   ├── 1785346179134_add-file-details-to-documents.js
+│   │   ├── 1785346180134_add-owner-to-companies.js
+│   │   └── 1785346181134_unique-application-per-user-job.js
+│   └── src/
+│       ├── app.js                     # instance Express + middleware global
+│       ├── server.js                  # HTTP listener + graceful shutdown
+│       ├── config/
+│       │   ├── env.js                 # pembacaan & validasi environment variable
+│       │   └── database.js            # PostgreSQL connection pool
+│       ├── routes/                    # definisi endpoint
+│       │   ├── index.js               # barrel: memasang seluruh sub-router
+│       │   ├── users.route.js
+│       │   ├── auth.route.js
+│       │   ├── companies.route.js
+│       │   ├── categories.route.js
+│       │   ├── jobs.route.js
+│       │   ├── applications.route.js
+│       │   ├── bookmarks.route.js
+│       │   ├── profile.route.js
+│       │   └── documents.route.js
+│       ├── controllers/               # membaca request, mengirim response
+│       ├── services/                  # aturan bisnis, melempar error domain
+│       ├── repositories/              # satu-satunya lapisan yang menulis SQL
+│       ├── validators/                # skema Joi (+ common/ untuk yang dipakai ulang)
+│       ├── middlewares/
+│       │   ├── auth.middleware.js     # verifikasi Bearer access token
+│       │   ├── validate.middleware.js # validasi payload dengan Joi
+│       │   ├── cache.middleware.js    # cache GET di Redis + header X-Data-Source
+│       │   ├── upload.middleware.js   # multer: PDF, maksimal 5 MB
+│       │   ├── notFound.middleware.js # route tidak dikenal → 404
+│       │   └── error.middleware.js    # error handler terpusat
+│       ├── errors/                    # ClientError, NotFoundError, dll.
+│       └── utils/
+│           ├── uuid.js
+│           ├── response.js
+│           ├── redis.js               # client + get/set/delete cache
+│           ├── cacheKeys.js           # seluruh nama key cache
+│           └── rabbitmq.js            # koneksi + publish
+│
+└── openjob-consumer/                  # ── PROYEK 2: pengirim email ──
+    ├── package.json
+    ├── eslint.config.js
+    ├── .env
+    ├── .env.example
+    └── src/
+        ├── consumer.js                # entry point: subscribe + graceful shutdown
+        ├── config/
+        │   ├── env.js
+        │   └── database.js            # pool kecil (max 2), hanya membaca
+        ├── repositories/
+        │   └── applications.repository.js   # query detail lamaran + pemilik lowongan
+        ├── services/
+        │   └── notification.service.js      # menyusun & mengirim email
+        └── utils/
+            ├── rabbitmq.js            # koneksi + consume + ack/nack
+            └── mailer.js              # transport nodemailer
 ```
 
 ### Alur sebuah request
@@ -109,11 +151,11 @@ OpenJob-API/
 ```
 Request
    ↓
-route          → menentukan endpoint, memasang middleware auth & validasi
+route          → menentukan endpoint, memasang middleware auth, cache & validasi
    ↓
 controller     → mengambil data dari req, memanggil service, menulis response
    ↓
-service        → aturan bisnis, melempar NotFoundError/InvariantError/dll.
+service        → aturan bisnis, invalidasi cache, publish pesan ke RabbitMQ
    ↓
 repository     → menjalankan query SQL, mengembalikan baris
    ↓
@@ -124,26 +166,55 @@ Error yang dilempar service tidak ditangkap di controller. Express 5 meneruskan
 promise yang rejected ke `error.middleware.js`, sehingga controller tetap ringkas
 tanpa blok `try/catch`.
 
+### Alur notifikasi antar proyek
+
+```
+openjob-api                          openjob-consumer
+    │                                       │
+POST /applications                          │
+    │ simpan lamaran ke PostgreSQL          │
+    │ hapus cache terkait                   │
+    │ publish { application_id } ───────────┼──► queue "job_application_queue"
+    │                                       │        (durable, persistent)
+    └─► 201 Created (tidak menunggu email)  │
+                                            ▼
+                                    baca pesan, query database:
+                                    pelamar → lowongan → perusahaan → pemilik
+                                            │
+                                            ▼
+                                    kirim email ke pemilik lowongan (SMTP)
+                                            │
+                                            ▼
+                                          ack
+```
+
+Isi pesan hanya `application_id`. Seluruh data email — nama pelamar, email
+pelamar, tanggal lamaran, alamat tujuan — diambil consumer dari database, tidak
+pernah dari isi pesan maupun ditulis langsung di kode.
+
 ---
 
 ## ERD
 
-Diagram relasi antar tabel tersedia pada berkas **`ERD-OpenJob-versi-1.png`** di
-root proyek.
+Diagram relasi antar tabel tersedia pada berkas **`ERD-OpenJob-versi-2.png`** di
+root repositori. Versi lama tetap disimpan sebagai `ERD-OpenJob-versi-1.png`.
 
 Ringkasan relasi:
 
 | Tabel             | Relasi                                                        |
 | ----------------- | ------------------------------------------------------------- |
-| `users`           | 1 user memiliki banyak `applications`, `bookmarks`, `authentications` |
-| `companies`       | 1 company memiliki banyak `jobs`                              |
+| `users`           | 1 user memiliki banyak `applications`, `bookmarks`, `authentications`, `documents` |
+| `companies`       | 1 company memiliki banyak `jobs`, dan dimiliki 1 `user` (pemilik) |
 | `categories`      | 1 category memiliki banyak `jobs`                             |
 | `jobs`            | milik 1 `company` dan 1 `category`                            |
 | `applications`    | menghubungkan `users` ↔ `jobs`                                |
 | `bookmarks`       | menghubungkan `users` ↔ `jobs`                                |
 | `authentications` | menyimpan refresh token milik `users`                         |
+| `documents`       | menyimpan metadata berkas PDF milik `users`                   |
 
-Seluruh foreign key memakai `ON DELETE CASCADE` dan diberi index tersendiri.
+Seluruh foreign key memakai `ON DELETE CASCADE` dan diberi index tersendiri,
+kecuali `companies.user_id` yang memakai `ON DELETE SET NULL` — menghapus akun
+pemilik tidak boleh ikut menghapus perusahaan beserta seluruh lowongannya.
 
 **Unique constraint:**
 
@@ -153,17 +224,23 @@ Seluruh foreign key memakai `ON DELETE CASCADE` dan diberi index tersendiri.
 | `categories`      | `name`                 |
 | `authentications` | `token`                |
 | `bookmarks`       | `(user_id, job_id)`    |
+| `applications`    | `(user_id, job_id)`    |
 
 ---
 
 ## Instalasi
 
-Prasyarat: **Node.js >= 20** dan **PostgreSQL** yang sudah berjalan.
+Prasyarat: **Node.js >= 20**, **PostgreSQL**, **Redis**, dan **RabbitMQ** yang
+sudah berjalan.
+
+Setiap proyek punya dependensi sendiri, jadi `npm install` dijalankan dua kali:
 
 ```bash
 git clone https://github.com/Rothiii/OpenJob-API.git
 cd OpenJob-API
-npm install
+
+npm install --prefix openjob-api
+npm install --prefix openjob-consumer
 ```
 
 Buat database:
@@ -176,13 +253,14 @@ createdb openjob
 
 ## Konfigurasi Environment
 
-Salin template lalu sesuaikan nilainya:
+Masing-masing proyek punya `.env` sendiri. Salin kedua template lalu sesuaikan:
 
 ```bash
-cp .env.example .env
+cp openjob-api/.env.example openjob-api/.env
+cp openjob-consumer/.env.example openjob-consumer/.env
 ```
 
-Isi berkas `.env`:
+### `openjob-api/.env`
 
 ```env
 # Server configuration
@@ -213,13 +291,6 @@ RABBITMQ_PORT=5672
 RABBITMQ_USER=guest
 RABBITMQ_PASSWORD=guest
 AMQP_URL=
-
-# Mail (dipakai program consumer)
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USER=
-MAIL_PASSWORD=
-MAIL_FROM=
 ```
 
 | Variabel            | Wajib | Default     | Keterangan                              |
@@ -243,15 +314,57 @@ MAIL_FROM=
 | `RABBITMQ_USER`     | tidak | guest       | User RabbitMQ                           |
 | `RABBITMQ_PASSWORD` | tidak | guest       | Password RabbitMQ                       |
 | `AMQP_URL`          | tidak | (kosong)    | URL AMQP utuh; menimpa `RABBITMQ_*`     |
-| `MAIL_HOST`         | tidak | localhost   | Host SMTP untuk notifikasi consumer     |
+
+### `openjob-consumer/.env`
+
+```env
+NODE_ENV=development
+
+# Database — database yang sama dengan API (skema dimiliki openjob-api)
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=
+PGDATABASE=openjob
+
+# RabbitMQ — harus menunjuk broker yang sama dengan API
+RABBITMQ_HOST=localhost
+RABBITMQ_PORT=5672
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+AMQP_URL=
+
+# Mail — untuk Gmail, MAIL_PASSWORD wajib App Password, bukan password akun
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USER=
+MAIL_PASSWORD=
+MAIL_FROM=
+```
+
+| Variabel            | Wajib | Default     | Keterangan                              |
+| ------------------- | ----- | ----------- | --------------------------------------- |
+| `PGHOST`            | ya    | —           | Host PostgreSQL                         |
+| `PGUSER`            | ya    | —           | User PostgreSQL                         |
+| `PGDATABASE`        | ya    | —           | Nama database                           |
+| `RABBITMQ_HOST`     | tidak | localhost   | Host RabbitMQ                           |
+| `RABBITMQ_PORT`     | tidak | 5672        | Port RabbitMQ                           |
+| `RABBITMQ_USER`     | tidak | guest       | User RabbitMQ                           |
+| `RABBITMQ_PASSWORD` | tidak | guest       | Password RabbitMQ                       |
+| `AMQP_URL`          | tidak | (kosong)    | URL AMQP utuh; menimpa `RABBITMQ_*`     |
+| `MAIL_HOST`         | tidak | localhost   | Host SMTP                               |
 | `MAIL_PORT`         | tidak | 587         | Port SMTP                               |
 | `MAIL_USER`         | tidak | (kosong)    | User SMTP                               |
-| `MAIL_PASSWORD`     | tidak | (kosong)    | Password SMTP                           |
+| `MAIL_PASSWORD`     | tidak | (kosong)    | Password SMTP / App Password            |
 | `MAIL_FROM`         | tidak | `MAIL_USER` | Alamat pengirim email notifikasi        |
 
-Kredensial tidak pernah ditulis di dalam kode. `src/config/env.js` membaca seluruh
-variabel di atas dan **menghentikan proses saat startup** jika ada variabel wajib
-yang kosong, sehingga kesalahan konfigurasi ketahuan sejak awal.
+Nilai `PG*` dan `RABBITMQ_*` di kedua berkas harus menunjuk ke database dan broker
+yang sama, karena di situlah kedua proyek bertemu.
+
+Kredensial tidak pernah ditulis di dalam kode. `src/config/env.js` di masing-masing
+proyek membaca seluruh variabel di atas dan **menghentikan proses saat startup**
+jika ada variabel wajib yang kosong, sehingga kesalahan konfigurasi ketahuan sejak
+awal.
 
 Berkas `.env` sudah masuk `.gitignore`; hanya `.env.example` yang di-commit.
 
@@ -259,10 +372,12 @@ Berkas `.env` sudah masuk `.gitignore`; hanya `.env.example` yang di-commit.
 
 ## Migrasi Database
 
-Pengelolaan struktur tabel memakai **node-pg-migrate**. Nama setiap berkas
-migrasi berprefiks timestamp yang dibuat otomatis oleh CLI.
+Skema database dimiliki **openjob-api**; seluruh perintah migrasi dijalankan dari
+sana. Consumer hanya membaca, tidak pernah mengubah struktur tabel.
 
 ```bash
+cd openjob-api
+
 npm run migrate:up       # jalankan seluruh migrasi
 npm run migrate:down     # batalkan satu migrasi terakhir
 npm run migrate:reset    # turunkan semua lalu naikkan lagi dari awal
@@ -274,26 +389,39 @@ Membuat migrasi baru:
 npm run migrate:create -- create-table-example
 ```
 
+Pengelolaan struktur tabel memakai **node-pg-migrate**. Nama setiap berkas migrasi
+berprefiks timestamp yang dibuat otomatis oleh CLI, dan urutan itulah yang
+menentukan urutan eksekusi.
+
 node-pg-migrate membaca koneksi dari variabel `PGHOST`, `PGPORT`, `PGUSER`,
-`PGPASSWORD`, dan `PGDATABASE` di `.env`, jadi tidak perlu `DATABASE_URL`.
+`PGPASSWORD`, dan `PGDATABASE` di `openjob-api/.env`, jadi tidak perlu
+`DATABASE_URL`.
 
 Urutan tabel yang dibuat: `uuid-ossp` extension → `users` → `authentications` →
-`categories` → `companies` → `jobs` → `bookmarks` → `applications`.
+`categories` → `companies` → `jobs` → `bookmarks` → `applications` → `documents`,
+lalu tiga migrasi tambahan versi 2: detail berkas pada `documents`, kolom pemilik
+pada `companies`, dan unique constraint `(user_id, job_id)` pada `applications`.
 
 ---
 
 ## Menjalankan Aplikasi
 
-Mode pengembangan (auto-reload dengan nodemon):
+Dua proyek = dua proses, jadi butuh dua terminal. Keduanya berdiri sendiri:
+API tetap melayani request walau consumer mati, dan consumer tetap memproses
+antrean walau API sedang berhenti.
+
+**Terminal 1 — API**
 
 ```bash
-npm run start:dev
+cd openjob-api
+npm run start:dev        # atau: npm start
 ```
 
-Mode produksi:
+**Terminal 2 — Consumer**
 
 ```bash
-npm start
+cd openjob-consumer
+npm run start:dev        # atau: npm start
 ```
 
 Server berjalan di `http://localhost:3000` (mengikuti `HOST` dan `PORT`).
@@ -303,12 +431,25 @@ Cek kesehatan server:
 curl http://localhost:3000/health
 ```
 
+Consumer tidak membuka port. Tanda dia siap adalah baris log:
+
+```
+RabbitMQ connected
+Consumer is waiting for job application messages...
+```
+
+Consumer wajib nyala saat menguji notifikasi email. Kalau dimatikan, pesan tetap
+aman menumpuk di queue (`durable` + `persistent`) dan akan diproses begitu
+dinyalakan kembali.
+
 ---
 
 ## Daftar Scripts
 
-| Perintah                 | Kegunaan                                       |
-| ------------------------ | ---------------------------------------------- |
+### `openjob-api`
+
+| Perintah                 | Kegunaan                                        |
+| ------------------------ | ----------------------------------------------- |
 | `npm run start:dev`      | Menjalankan server dengan nodemon (development) |
 | `npm run dev`            | Alias dari `start:dev`                          |
 | `npm start`              | Menjalankan server tanpa watcher                |
@@ -317,8 +458,15 @@ curl http://localhost:3000/health
 | `npm run migrate:down`   | Membatalkan satu migrasi terakhir               |
 | `npm run migrate:reset`  | Reset seluruh skema database                    |
 | `npm run migrate:create` | Membuat berkas migrasi baru                     |
-| `npm run consumer`       | Menjalankan consumer RabbitMQ (pengirim email)  |
-| `npm run consumer:dev`   | Consumer dengan nodemon (development)           |
+
+### `openjob-consumer`
+
+| Perintah            | Kegunaan                                          |
+| ------------------- | ------------------------------------------------- |
+| `npm start`         | Menjalankan consumer (pengirim email notifikasi)  |
+| `npm run start:dev` | Consumer dengan nodemon (development)             |
+| `npm run dev`       | Alias dari `start:dev`                            |
+| `npm run lint`      | Menjalankan ESLint pada `src`                     |
 
 ---
 
@@ -538,6 +686,9 @@ field `document`.
 
 ## Pemenuhan Kriteria Submission
 
+Kecuali disebut lain, seluruh path pada tabel di bawah relatif terhadap
+**`openjob-api/`**.
+
 ### Kriteria 1 — Menggunakan Database untuk Menyimpan Data
 
 | Ketentuan                                                     | Implementasi                                                    |
@@ -554,7 +705,7 @@ field `document`.
 | Middleware error handling                                     | `src/middlewares/error.middleware.js`                            |
 | Unique constraint                                             | `users.email`, `categories.name`, `authentications.token`, `bookmarks(user_id, job_id)` |
 | Normalisasi & relasi antar tabel                              | 7 tabel dengan foreign key ber-`CASCADE`                         |
-| ERD dilampirkan                                               | `ERD-OpenJob-versi-1.png`                                        |
+| ERD dilampirkan                                               | `ERD-OpenJob-versi-1.png`, diperbarui pada `ERD-OpenJob-versi-2.png` |
 | Query parameter `?title` dan `?company-name` pada `GET /jobs` | `src/repositories/jobs.repository.js`                            |
 
 ### Kriteria 2 — Autentikasi dan Otorisasi
@@ -577,12 +728,13 @@ field `document`.
 
 ### Layanan pendukung
 
-Selain PostgreSQL, versi 2 membutuhkan **Redis** dan **RabbitMQ** berjalan
-lokal. Program consumer dijalankan pada terminal terpisah dari server:
+Selain PostgreSQL, versi 2 membutuhkan **Redis** dan **RabbitMQ** berjalan lokal.
+Consumer kini menjadi **proyek terpisah** dengan `package.json` sendiri, dan
+dijalankan sebagai proses tersendiri:
 
 ```bash
-npm run start:dev   # terminal 1 — REST API
-npm run consumer    # terminal 2 — consumer RabbitMQ + pengirim email
+cd openjob-api      && npm run start:dev   # terminal 1 — REST API
+cd openjob-consumer && npm start           # terminal 2 — consumer + pengirim email
 ```
 
 Server tetap melayani permintaan meski Redis atau RabbitMQ mati: cache akan
@@ -627,18 +779,22 @@ Invalidasi cache dilakukan di service, satu keluarga kunci sekaligus:
 
 | Ketentuan                                   | Implementasi                                          |
 | ------------------------------------------- | ------------------------------------------------------ |
-| Publish saat kandidat melamar               | `src/services/applications.service.js`                  |
+| Publish saat kandidat melamar               | `openjob-api/src/services/applications.service.js`      |
 | Payload hanya `application_id`              | `publishToQueue({ application_id })`                    |
-| Program consumer asynchronous               | `src/consumer.js` (`npm run consumer`)                  |
+| Program consumer asynchronous               | Proyek terpisah `openjob-consumer/` (`npm start`)       |
 | Kredensial di environment variables         | `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, opsional `AMQP_URL` |
-| Pengiriman email memakai Nodemailer         | `src/utils/mailer.js`                                   |
-| Kredensial email di environment variables   | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD`  |
-| Email dikirim ke pemilik lowongan           | `applications.repository.findNotificationDetails()` menelusuri lamaran → lowongan → perusahaan → pemilik |
+| Pengiriman email memakai Nodemailer         | `openjob-consumer/src/utils/mailer.js`                  |
+| Kredensial email di environment variables   | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD` di `openjob-consumer/.env` |
+| Email dikirim ke pemilik lowongan           | `openjob-consumer/src/repositories/applications.repository.js` menelusuri lamaran → lowongan → perusahaan → pemilik |
 | Isi email diambil dari database             | Nama pelamar, email pelamar, dan tanggal lamaran        |
 
 Kepemilikan lowongan berasal dari kolom `companies.user_id`, yaitu user yang
 membuat perusahaan tersebut. Publish berjalan di luar jalur respons sehingga
 pelamar tidak menunggu proses email.
+
+Kedua proyek tidak saling meng-import kode. Nama queue (`job_application_queue`)
+dideklarasikan `durable` di kedua sisi, jadi tidak masalah proses mana yang lebih
+dulu dijalankan.
 
 ---
 

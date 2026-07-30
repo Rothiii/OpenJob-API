@@ -1,8 +1,5 @@
-import './config/env.js';
-import * as applicationsRepository from './repositories/applications.repository.js';
-import { consumeFromQueue, closeRabbitMQ } from './utils/rabbitmq.js';
-import { sendMail } from './utils/mailer.js';
-import { closePool } from './config/database.js';
+import * as applicationsRepository from '../repositories/applications.repository.js';
+import { sendMail } from '../utils/mailer.js';
 
 const formatDate = (value) =>
   new Date(value).toLocaleString('id-ID', {
@@ -43,14 +40,12 @@ const buildEmail = (details) => {
 
 /**
  * Only the owner of the job is notified — the applicant already knows they
- * applied, and every address comes from the database.
+ * applied, and every address comes from the database, never from the message.
+ *
+ * The message carries just an application_id, so anything else could be stale
+ * by the time it is read.
  */
-const handleMessage = async ({ application_id: applicationId }) => {
-  if (!applicationId) {
-    console.warn('Message without application_id, skipping');
-    return;
-  }
-
+export const notifyJobOwner = async (applicationId) => {
   const details =
     await applicationsRepository.findNotificationDetails(applicationId);
 
@@ -75,23 +70,4 @@ const handleMessage = async ({ application_id: applicationId }) => {
   );
 };
 
-const start = async () => {
-  await consumeFromQueue(handleMessage);
-  console.log('Consumer is waiting for job application messages...');
-};
-
-const shutdown = async (signal) => {
-  console.log(`\n${signal} received, stopping consumer...`);
-
-  await closeRabbitMQ();
-  await closePool();
-  process.exit(0);
-};
-
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-start().catch((error) => {
-  console.error('Consumer failed to start:', error.message);
-  process.exit(1);
-});
+export default { notifyJobOwner };
